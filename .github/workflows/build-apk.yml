@@ -21,11 +21,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 雲端初始化 Capacitor 並打包 Android 專案
+      - name: 自動整理英文資源並打包 APK
         run: |
+          mkdir -p www
+          cp -r "工人職場/"* www/
+          cd www
+          [ -f "奧客.png" ] && mv "奧客.png" m1.png && sed -i 's/奧客\.png/m1.png/g' *.* || true
+          [ -f "豬隊友同事.png" ] && mv "豬隊友同事.png" m2.png && sed -i 's/豬隊友同事\.png/m2.png/g' *.* || true
+          [ -f "壞老闆.png" ] && mv "壞老闆.png" m3.png && sed -i 's/壞老闆\.png/m3.png/g' *.* || true
+          cd ..
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init "職場打工人" "com.work.rpg" --web-dir "工人職場"
+          npx cap init "職場打工人" "com.work.rpg" --web-dir www
           npx cap add android
           cd android
           chmod +x gradlew
