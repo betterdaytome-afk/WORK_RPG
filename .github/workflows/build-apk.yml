@@ -1,0 +1,38 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下載遊戲程式碼
+        uses: actions/checkout@v4
+
+      - name: 設定 Node.js 與 Java 環境
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 雲端初始化 Capacitor 並打包 Android 專案
+        run: |
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "職場打工人" "com.work.rpg" --web-dir "工人職場"
+          npx cap add android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: 匯出 APK 安裝包
+        uses: actions/upload-artifact@v4
+        with:
+          name: WorkRPG-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
