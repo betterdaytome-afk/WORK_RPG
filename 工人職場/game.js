@@ -1504,3 +1504,189 @@ spawnFloorMonster(true);
 
 })();
 
+// =========================================================================
+// 👥 5人即時連線組隊系統（已綁定你的專屬 Firebase 伺服器）
+// =========================================================================
+const FB_URL = "https://work-party-default-rtdb.asia-southeast1.firebasedatabase.app";
+const MY_UID = "u_" + Math.random().toString(36).slice(2, 9);
+let currentRoom = null;
+let teammateEls = {};
+
+// 1. 自動在左上角導覽列建立「👥 組隊房間」按鈕
+(function initPartyUI() {
+  const nav = document.getElementById('top-nav-bar');
+  if (!nav || document.getElementById('btn-party-room')) return;
+
+  const btn = document.createElement('button');
+  btn.id = 'btn-party-room';
+  btn.className = 'nav-btn';
+  btn.style.background = '#6c5ce7';
+  btn.textContent = '👥 組隊房間';
+  btn.onclick = openPartyModal;
+  nav.appendChild(btn);
+})();
+
+// 2. 打開組隊視窗（開房 / 輸入4位數房號加入 / 退出房間）
+window.openPartyModal = function() {
+  let modal = document.getElementById('party-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'party-modal';
+    Object.assign(modal.style, {
+      position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.75)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999
+    });
+    document.body.appendChild(modal);
+  }
+
+  if (currentRoom) {
+    modal.innerHTML = `
+      <div style="background:#1e272e;color:#fff;padding:20px;border-radius:14px;width:88%;max-width:340px;text-align:center;border:2px solid #6c5ce7;">
+        <h3 style="margin-top:0;color:#a29bfe;">👥 組隊房間連線中</h3>
+        <div style="font-size:26px;font-weight:bold;letter-spacing:4px;background:#2f3640;padding:10px;border-radius:8px;margin:12px 0;color:#55efc4;">
+          房號：${currentRoom}
+        </div>
+        <p style="font-size:13px;color:#dfe6e9;">把這組 4 位數房號傳給朋友（最多 5 人同房），輸入即可並肩作戰！</p>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:16px;">
+          <button onclick="leavePartyRoom()" style="flex:1;padding:10px;border:none;border-radius:8px;background:#d63031;color:#fff;font-weight:bold;cursor:pointer;">離開房間</button>
+          <button onclick="document.getElementById('party-modal').style.display='none'" style="flex:1;padding:10px;border:none;border-radius:8px;background:#636e72;color:#fff;font-weight:bold;cursor:pointer;">返回遊戲</button>
+        </div>
+      </div>`;
+  } else {
+    modal.innerHTML = `
+      <div style="background:#1e272e;color:#fff;padding:20px;border-radius:14px;width:88%;max-width:340px;text-align:center;border:2px solid #6c5ce7;">
+        <h3 style="margin-top:0;color:#a29bfe;">👥 5人即時連線組隊</h3>
+        <button onclick="createPartyRoom()" style="width:100%;padding:12px;border:none;border-radius:8px;background:#00b894;color:#fff;font-size:15px;font-weight:bold;cursor:pointer;margin-bottom:14px;">
+          ➕ 建立新房間（產生房號）
+        </button>
+        <div style="border-top:1px solid #485460;padding-top:14px;">
+          <input id="input-room-id" type="number" placeholder="輸入朋友的 4 位數房號" style="width:90%;padding:10px;border-radius:8px;border:none;text-align:center;font-size:16px;margin-bottom:10px;">
+          <button onclick="joinPartyRoom()" style="width:100%;padding:11px;border:none;border-radius:8px;background:#0984e3;color:#fff;font-size:15px;font-weight:bold;cursor:pointer;">
+            🚀 加入朋友房間
+          </button>
+        </div>
+        <button onclick="document.getElementById('party-modal').style.display='none'" style="margin-top:12px;padding:6px 18px;border:none;border-radius:6px;background:transparent;color:#b2bec3;cursor:pointer;">關閉視窗</button>
+      </div>`;
+  }
+  modal.style.display = 'flex';
+};
+
+// 3. 建立房間（自動生成 4 位數房號）
+window.createPartyRoom = function() {
+  const code = String(Math.floor(1000 + Math.random() * 9000));
+  currentRoom = code;
+  document.getElementById('btn-party-room').textContent = `👥 房:${code}`;
+  document.getElementById('btn-party-room').style.background = '#00b894';
+  openPartyModal();
+};
+
+// 4. 加入房間（檢查房間人數上限 5 人）
+window.joinPartyRoom = async function() {
+  const code = (document.getElementById('input-room-id').value || '').trim();
+  if (code.length !== 4) { alert('請輸入正確的 4 位數房號！'); return; }
+  try {
+    const res = await fetch(`${FB_URL}/rooms/${code}.json`);
+    const data = await res.json();
+    if (!data) { alert('找不到這個房間，請確認房號是否正確！'); return; }
+
+    // 過濾掉超過 10 秒沒活動的離線玩家
+    const now = Date.now();
+    const activePlayers = Object.values(data).filter(p => p && (now - p.ts < 10000));
+    if (activePlayers.length >= 5) { alert('這個房間已經滿 5 人囉！'); return; }
+
+    currentRoom = code;
+    document.getElementById('btn-party-room').textContent = `👥 房:${code}`;
+    document.getElementById('btn-party-room').style.background = '#00b894';
+    document.getElementById('party-modal').style.display = 'none';
+  } catch (e) {
+    alert('連線失敗，請確認手機有開啟網路！');
+  }
+};
+
+// 5. 離開房間並清除畫面上的隊友
+window.leavePartyRoom = async function() {
+  if (currentRoom) {
+    fetch(`${FB_URL}/rooms/${currentRoom}/${MY_UID}.json`, { method: 'DELETE' }).catch(() => {});
+  }
+  currentRoom = null;
+  Object.values(teammateEls).forEach(el => el.remove());
+  teammateEls = {};
+  document.getElementById('btn-party-room').textContent = '👥 組隊房間';
+  document.getElementById('btn-party-room').style.background = '#6c5ce7';
+  document.getElementById('party-modal').style.display = 'none';
+};
+
+// 6. 每 0.8 秒同步一次自己與隊友的位置、外觀、樓層與等級
+setInterval(async () => {
+  if (!currentRoom || !hero.roleData) return;
+  const r = hero.roleData;
+  const myName = (document.getElementById('p-name-display')?.textContent || '打工人').trim();
+
+  // 上傳自己的即時座標與狀態
+  const payload = {
+    name: myName,
+    lv: hero.lv,
+    x: Math.round(hero.x),
+    y: Math.round(hero.y),
+    dir: hero.dir,
+    mapIdx: typeof currentMapIdx !== 'undefined' ? currentMapIdx : 0,
+    isHome: !!window.isHome,
+    pos: r.pos || '0% 0%',
+    color: r.color || '#55efc4',
+    ts: Date.now()
+  };
+
+  try {
+    await fetch(`${FB_URL}/rooms/${currentRoom}/${MY_UID}.json`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+
+    // 讀取同房間所有隊友資料並渲染到畫面上
+    const res = await fetch(`${FB_URL}/rooms/${currentRoom}.json`);
+    const roomData = await res.json();
+    if (!roomData) return;
+
+    const now = Date.now();
+    const activeIds = new Set();
+
+    Object.entries(roomData).forEach(([uid, p]) => {
+      if (uid === MY_UID || !p || (now - p.ts > 10000)) return;
+      // 只顯示在同一層樓且不在家裡的隊友
+      const sameFloor = !window.isHome && !p.isHome && p.mapIdx === (typeof currentMapIdx !== 'undefined' ? currentMapIdx : 0);
+      if (!sameFloor) return;
+
+      activeIds.add(uid);
+      let el = teammateEls[uid];
+      if (!el) {
+        el = document.createElement('div');
+        Object.assign(el.style, {
+          position: 'absolute', width: '90px', textAlign: 'center',
+          pointerEvents: 'none', zIndex: 11,
+          transition: 'left 0.75s linear, top 0.75s linear'
+        });
+        stage.appendChild(el);
+        teammateEls[uid] = el;
+      }
+
+      el.style.left = p.x + 'px';
+      el.style.top = p.y + 'px';
+      el.innerHTML = `
+        <div style="font-size:10px;background:rgba(0,0,0,0.75);color:#55efc4;padding:1px 6px;border-radius:6px;white-space:nowrap;margin-bottom:2px;border:1px solid ${p.color};">
+          Lv.${p.lv} ${p.name}
+        </div>
+        <div style="width:68px;height:68px;margin:0 auto;background:url('heroes_3d.png') ${p.pos}/400% 200% no-repeat;transform:translate(-15%, -50%) scaleX(${-p.dir});filter:drop-shadow(0 4px 8px ${p.color});"></div>
+      `;
+    });
+
+    // 清除已離線或換樓層的隊友圖示
+    Object.keys(teammateEls).forEach(uid => {
+      if (!activeIds.has(uid)) {
+        teammateEls[uid].remove();
+        delete teammateEls[uid];
+      }
+    });
+  } catch (e) {
+    // 斷網時安靜略過，不影響單機遊玩
+  }
+}, 800);
