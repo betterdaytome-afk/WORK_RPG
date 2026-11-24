@@ -1,0 +1,164 @@
+﻿<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><title>職場打工人 2D</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div id="char-select-modal"><h2>🌟 選擇你的夥伴</h2><input id="player-name" placeholder="輸入名字(預設學徒阿痞)" style="padding:8px;border-radius:8px;border:none;text-align:center;"><div class="char-grid" id="char-grid-box"></div></div>
+
+<div class="left-world">
+  <!-- 左上角：家園切換與互動按鈕列 -->
+  <div id="top-nav-bar">
+    <button class="nav-btn" id="btn-toggle-home" onclick="toggleHome()">🏠 下班回家</button>
+    <button class="nav-btn" style="background:#6c5ce7;" onclick="openDex()">📖 職人圖鑑</button>
+    <button class="nav-btn" style="background:#636e72;" onclick="resetCharacter()">🔄 切換職業</button>
+    <button class="nav-btn" style="background:#e84393;" onclick="openMultiModal()">🤝 馴獸師大廳</button>
+    <button class="nav-btn home-only" style="display:none;background:#e17055;" onclick="openBreedModal()">🥚 員工培訓中心</button>
+    <button class="nav-btn home-only" style="display:none;background:#0984e3;" onclick="spawnVisitor()">👥 邀請玩家來訪</button>
+  </div>
+
+  <!-- 獨立拉出來的「角色數據狀態欄」 -->
+    <div id="player-hud" onclick="this.classList.toggle('hud-open');this.classList.toggle('hud-closed')" style="position:absolute;top:54px;left:14px;z-index:20;background:rgba(20,25,35,0.85);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:10px 14px;color:#fff;font-size:12px;line-height:1.65;box-shadow:0 4px 12px rgba(0,0,0,0.4);pointer-events:auto;cursor:pointer;min-width:215px;">
+
+    <div style="font-size:13px;margin-bottom:2px;">👤 <b id="ui-player">學徒阿痞</b> | <b id="ui-partner" style="color:#ffeaa7">工地學徒</b> Lv.<b id="lv">1</b></div>
+    <div>❤️ 血量：<b id="ui-hp" style="color:#ff6b81">100/100</b> &nbsp;💙 魔力：<b id="ui-mp" style="color:#70a1ff">50/50</b></div>
+    <div>✨ 經驗：<span id="exp">0</span>/<span id="max-exp">100</span> | 💰 金幣：<b id="ui-gold" style="color:#fdcb6e">0</b></div>
+    
+    <!-- 戰鬥進階能力值 -->
+    <div style="border-top:1px solid rgba(255,255,255,0.15);margin-top:4px;padding-top:4px;display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;">
+      <div>⚔️ 物攻：<b id="ui-atk" style="color:#ffa502">18</b></div>
+      <div>🔮 魔攻：<b id="ui-matk" style="color:#a29bfe">15</b></div>
+      <div>🛡️ 物防：<b id="ui-def" style="color:#7bed9f">0</b></div>
+      <div>💠 魔防：<b id="ui-mdef" style="color:#81ecec">5</b></div>
+      <div style="grid-column:span 2;">⚡ 攻速：<b id="ui-aspd" style="color:#ffeaa7">1.15</b> 次/秒</div>
+    </div>
+
+    <!-- 四大基礎素質 -->
+    <div style="border-top:1px solid rgba(255,255,255,0.15);margin-top:4px;padding-top:4px;color:#dfe6e9;">
+      💪 力:<b id="ui-str" style="color:#ff7675">5</b> 💨 敏:<b id="ui-agi" style="color:#55efc4">5</b> 🫀 體:<b id="ui-vit" style="color:#ffeaa7">5</b> 🔮 智:<b id="ui-int" style="color:#74b9ff">5</b>
+    </div>
+  </div>
+
+   <div id="stage">
+    <div id="monster-box" style="user-select:none;"><div id="hp-bar-bg"><div id="hp-bar"></div></div><img id="monster-img" src="奧客.png" draggable="false" style="pointer-events:none;"></div>
+    <div id="hero-box" style="user-select:none;"><img id="single-img" src="hero01.png" draggable="false" style="pointer-events:none;"><div id="svg-char-holder"></div></div>
+  </div>
+
+
+  <!-- 下方技能與快捷鍵喝藥水列 -->
+  <div class="skill-bar">
+    <button class="skill-btn" id="btn-s1">🔥 射擊(空白)</button>
+    <button class="skill-btn" id="btn-s2" disabled>🔒 Lv.2 衝刺(Q)</button>
+    <button class="skill-btn" id="btn-s3" disabled>🔒 Lv.4 大招(E)</button>
+    <button class="skill-btn" id="btn-pot-hp" style="background:#d63031;" onclick="drinkPotion('hp')">❤️ 咖啡(1) [<span id="cnt-hp">0</span>]</button>
+    <button class="skill-btn" id="btn-pot-mp" style="background:#0984e3;" onclick="drinkPotion('mp')">💙 能量飲料(2) [<span id="cnt-mp">0</span>]</button>
+  </div>
+</div>
+
+<!-- 背包道具互動小視窗 -->
+<div id="bag-action-modal" class="sub-modal" style="display:none;" onclick="this.style.display='none'">
+  <div class="sub-modal-box" onclick="event.stopPropagation()">
+    <h3 id="bag-modal-title" style="margin:0 0 8px;">道具名稱</h3>
+    <p id="bag-modal-desc" style="font-size:13px;color:#dfe6e9;margin:0 0 14px;"></p>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+      <button class="nav-btn" style="background:#00b894;" id="btn-bag-use">✨ 裝備 / 使用</button>
+      <button class="nav-btn" style="background:#e17055;" id="btn-bag-sell">💰 出售 / 分解</button>
+      <button class="nav-btn" style="background:#fdcb6e;color:#2d3436;" id="btn-bag-drop">📍 丟在地上</button>
+      <button class="nav-btn" style="background:#636e72;" onclick="document.getElementById('bag-action-modal').style.display='none'">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 交配與孵化視窗 -->
+<div id="breed-modal" class="sub-modal" style="display:none;" onclick="this.style.display='none'">
+  <div class="sub-modal-box" onclick="event.stopPropagation()">
+    <h3 style="margin:0 0 10px;color:#ffeaa7;">🥚 職場打工人員工培訓中心</h3>
+    <p style="font-size:12px;color:#dfe6e9;margin:0 0 12px;">選擇兩隻職場打工人進行交配，產下的數位蛋會放在家園地板上孵化（孵化後永久增加全隊攻擊力）！</p>
+    <div style="display:flex;gap:10px;justify-content:center;align-items:center;margin-bottom:14px;">
+      <select id="breed-p1" class="breed-select"></select>
+      <span style="font-size:20px;">❤️</span>
+      <select id="breed-p2" class="breed-select"></select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center;">
+      <button class="nav-btn" style="background:#e84393;" onclick="doBreed()">💕 開始交配生蛋</button>
+      <button class="nav-btn" style="background:#636e72;" onclick="document.getElementById('breed-modal').style.display='none'">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🤝 馴獸師多人互動與補給大廳 -->
+<div id="multi-modal" class="sub-modal" style="display:none;" onclick="this.style.display='none'">
+  <div class="sub-modal-box" style="width:460px;max-width:92vw;" onclick="event.stopPropagation()">
+    <h3 style="margin:0 0 10px;color:#ffeaa7;">🤝 馴獸師多人互動大廳</h3>
+    
+    <div style="background:rgba(255,255,255,0.08);padding:10px;border-radius:10px;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:bold;margin-bottom:6px;color:#fdcb6e;">🏪 金幣補給站（目前金幣：<span id="shop-gold">0</span>）</div>
+      <div style="display:flex;gap:8px;justify-content:center;">
+        <button class="nav-btn" style="background:#d63031;font-size:12px;" onclick="buyPotion('hp', 30)">❤️ 買回復藥水 (30金)</button>
+        <button class="nav-btn" style="background:#0984e3;font-size:12px;" onclick="buyPotion('mp', 30)">💙 買魔力藥水 (30金)</button>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.08);padding:10px;border-radius:10px;margin-bottom:12px;text-align:left;">
+      <div style="font-size:13px;font-weight:bold;margin-bottom:4px;color:#55efc4;">📤 我的馴獸師名片代碼（複製傳給朋友）：</div>
+      <div style="display:flex;gap:6px;">
+        <input id="my-share-code" readonly style="flex:1;padding:6px;border-radius:6px;border:none;font-size:12px;background:#2d3436;color:#fff;">
+        <button class="nav-btn" style="background:#00b894;padding:6px 12px;" onclick="copyShareCode()">複製</button>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.08);padding:10px;border-radius:10px;margin-bottom:12px;text-align:left;">
+      <div style="font-size:13px;font-weight:bold;margin-bottom:4px;color:#74b9ff;">📥 輸入朋友的代碼進行互動：</div>
+      <input id="friend-code-input" placeholder="貼上朋友傳給你的代碼..." style="width:100%;box-sizing:border-box;padding:6px;border-radius:6px;border:none;margin-bottom:8px;font-size:12px;">
+      <div style="display:flex;gap:8px;justify-content:center;">
+        <button class="nav-btn" style="background:#0984e3;" onclick="importFriend('visit')">🏠 邀請來我家送禮</button>
+        <button class="nav-btn" style="background:#e84393;" onclick="importFriend('duel')">⚔️ 召喚成 Boss 切磋</button>
+      </div>
+    </div>
+
+    <button class="nav-btn" style="background:#636e72;" onclick="document.getElementById('multi-modal').style.display='none'">關閉大廳</button>
+  </div>
+</div>
+
+<!-- 職場打工人全圖鑑視窗 -->
+<!-- 🧹 批量分解裝備選項視窗 -->
+<div id="batch-sell-modal" class="sub-modal" style="display:none;" onclick="this.style.display='none'">
+  <div class="sub-modal-box" style="width:340px;max-width:90vw;text-align:left;" onclick="event.stopPropagation()">
+    <h3 style="margin:0 0 10px;color:#ffeaa7;text-align:center;">🧹 批量分解裝備設定</h3>
+    <p style="font-size:12px;color:#dfe6e9;margin:0 0 12px;text-align:center;">請勾選要自動分解換取金幣的條件（藥水不會被分解）：</p>
+    
+    <div style="background:rgba(255,255,255,0.08);padding:12px;border-radius:10px;margin-bottom:14px;line-height:2;font-size:13px;">
+      <label style="display:block;cursor:pointer;"><input type="checkbox" id="chk-sell-other" checked> 🚫 所有<b>非本職業</b>裝備（包含藍裝/金裝）</label>
+      <label style="display:block;cursor:pointer;"><input type="checkbox" id="chk-sell-common" checked> ⚪ 本職業 <b>1詞綴（普通白裝）</b></label>
+      <label style="display:block;cursor:pointer;"><input type="checkbox" id="chk-sell-rare"> 🔵 本職業 <b>2詞綴（精良藍裝）</b></label>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:center;">
+      <button class="nav-btn" style="background:#e17055;" onclick="execBatchSell()">💰 確認分解換金幣</button>
+      <button class="nav-btn" style="background:#636e72;" onclick="document.getElementById('batch-sell-modal').style.display='none'">取消</button>
+    </div>
+  </div>
+</div>
+
+<div id="dex-modal" class="sub-modal" style="display:none;" onclick="this.style.display='none'">
+  <div class="sub-modal-box" style="width:680px;max-width:92vw;max-height:82vh;display:flex;flex-direction:column;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h3 style="margin:0;color:#ffeaa7;">📖 職場打工人全圖鑑 (<span id="dex-count">0</span> 隻)</h3>
+      <button class="nav-btn" style="background:#636e72;padding:5px 12px;" onclick="document.getElementById('dex-modal').style.display='none'">關閉</button>
+    </div>
+    <div id="dex-grid" class="dex-grid"></div>
+  </div>
+</div>
+
+<!-- 右側選單 -->
+<div id="right-panel" onclick="event.stopPropagation()">
+  <button id="btn-toggle-panel" onclick="const p=document.getElementById('right-panel');p.classList.toggle('collapsed');this.textContent=p.classList.contains('collapsed')?'📂 展開選單':'➖ 收合選單';">➖ 收合選單</button>
+  <div class="panel-card"><b>🛡️ 全身裝備</b><br>🪖 頭盔：<span id="eq-h" style="color:#70a1ff">無</span><br>👕 衣服：<span id="eq-c" style="color:#7bed9f">無</span><br>⚔️ 武器：<span id="eq-w" style="color:#ffa502">無</span></div>
+  <div class="panel-card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <b>🎒 背包道具 <small style="color:#aaa">(點擊)</small></b>
+            <button onclick="openBatchSellModal()" style="background:#e17055;color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;white-space:nowrap;">🧹 批量分解</button>
+
+    </div>
+    <div id="bag-list"></div>
+  </div>
+
+
+<script src="data.js"></script><script src="game.js"></script>
+</body></html>
